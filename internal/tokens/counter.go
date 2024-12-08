@@ -25,7 +25,7 @@ func NewCounter(encoding string) (*Counter, error) {
 
 // Count returns the number of tokens in the given text
 func (c *Counter) Count(text string) (int, error) {
-	tkm, err := tiktoken.EncodingForModel(c.encoding)
+	tkm, err := tiktoken.GetEncoding(c.encoding)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get encoding: %w", err)
 	}
