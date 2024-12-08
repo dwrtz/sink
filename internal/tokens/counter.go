@@ -2,6 +2,7 @@ package tokens
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/pkoukk/tiktoken-go"
 )
@@ -35,12 +36,16 @@ func (c *Counter) Count(text string) (int, error) {
 }
 
 // CountFiles counts tokens in multiple files and returns the total
-func (c *Counter) CountFiles(files []string) (int, error) {
+func (c *Counter) CountFiles(paths []string) (int, error) {
 	total := 0
-	for _, file := range files {
-		count, err := c.Count(file)
+	for _, p := range paths {
+		content, err := os.ReadFile(p)
 		if err != nil {
-			return 0, fmt.Errorf("failed to count tokens in file %s: %w", file, err)
+			return 0, fmt.Errorf("failed to read file %s: %w", p, err)
+		}
+		count, err := c.Count(string(content))
+		if err != nil {
+			return 0, fmt.Errorf("failed to count tokens in file %s: %w", p, err)
 		}
 		total += count
 	}

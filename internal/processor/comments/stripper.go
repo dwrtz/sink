@@ -36,8 +36,9 @@ func stripPythonComments(content string) string {
 	lineComments := regexp.MustCompile(`#.*`)
 	content = lineComments.ReplaceAllString(content, "")
 
-	// Strip docstrings
-	docStrings := regexp.MustCompile(`(?s)(["']{3})([\s\S]*?)\\1`)
+	// Strip triple-quoted strings (docstrings)
+	// Matches """...""" or '''...'''
+	docStrings := regexp.MustCompile(`(?s)(\"\"\".*?\"\"\"|\'\'\'.*?\'\'\')`)
 	content = docStrings.ReplaceAllString(content, "")
 
 	return strings.TrimSpace(content)

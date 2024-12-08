@@ -3,6 +3,7 @@ package filter
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -43,5 +44,7 @@ func IsIgnored(path string, patterns []string) bool {
 // matchGitignorePattern checks if a path matches a gitignore pattern
 func matchGitignorePattern(path, pattern string) bool {
 	// TODO: Implement proper gitignore pattern matching
-	return strings.Contains(path, pattern)
+	// A very rough approximation:
+	match, _ := filepath.Match(pattern, filepath.Base(path))
+	return match
 }

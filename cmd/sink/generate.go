@@ -120,6 +120,9 @@ func newGenerateCmd() *cobra.Command {
 				}
 
 				if showPrice {
+					if provider != "openai" {
+						fmt.Printf("Warning: Provider '%s' not currently implemented. Using openai pricing.\n", provider)
+					}
 					price, err := counter.EstimatePrice(count, outputTokens, model)
 					if err != nil {
 						return fmt.Errorf("failed to estimate price: %w", err)
