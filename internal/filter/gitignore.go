@@ -1,50 +1,94 @@
 package filter
 
 import (
-	"bufio"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/osfs"
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 )
 
-// LoadGitignorePatterns loads gitignore patterns from a file
-func LoadGitignorePatterns(path string) ([]string, error) {
-	if path == "" {
-		return nil, nil
+// GitignoreFilter handles gitignore pattern matching
+type GitignoreFilter struct {
+	matcher gitignore.Matcher
+	fs      billy.Filesystem
+}
+
+type GitignoreConfig struct {
+	RepoRoot           string `yaml:"repo-root"`
+	LoadGlobalPatterns bool   `yaml:"load-global-patterns"`
+	LoadSystemPatterns bool   `yaml:"load-system-patterns"`
+}
+
+func PathParts(p string) []string {
+	p = filepath.Clean(p)
+	if p == "." {
+		// Represents the current directory, no meaningful components
+		return []string{}
 	}
 
-	file, err := os.Open(path)
+	var parts []string
+	for p != "" && p != string(filepath.Separator) {
+		dir, file := filepath.Split(p)
+		if file == "" {
+			// This means p ended with a separator or we hit the root.
+			// Trim the trailing separator from dir and continue.
+			p = strings.TrimSuffix(dir, string(filepath.Separator))
+			continue
+		}
+
+		parts = append(parts, file)
+		// Move up one directory level by trimming the trailing separator from dir
+		p = strings.TrimSuffix(dir, string(filepath.Separator))
+	}
+
+	// Reverse the collected parts to restore the original order
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return parts
+}
+
+// NewGitignoreFilter creates a new GitignoreFilter
+func NewFilter(config GitignoreConfig) (*GitignoreFilter, error) {
+	fs := osfs.New(config.RepoRoot)
+	patterns, err := gitignore.ReadPatterns(fs, []string{})
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	var patterns []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" && !strings.HasPrefix(line, "#") {
-			patterns = append(patterns, line)
+	if config.LoadGlobalPatterns {
+		globalPatterns, err := gitignore.LoadGlobalPatterns(fs)
+		if err != nil {
+			return nil, err
+		}
+		if globalPatterns != nil {
+			patterns = append(patterns, globalPatterns...)
 		}
 	}
 
-	return patterns, scanner.Err()
-}
-
-// IsIgnored checks if a path matches any gitignore pattern
-func IsIgnored(path string, patterns []string) bool {
-	for _, pattern := range patterns {
-		if matchGitignorePattern(path, pattern) {
-			return true
+	if config.LoadSystemPatterns {
+		systemPatterns, err := gitignore.LoadSystemPatterns(fs)
+		if err != nil {
+			return nil, err
+		}
+		if systemPatterns != nil {
+			patterns = append(patterns, systemPatterns...)
 		}
 	}
-	return false
+
+	matcher := gitignore.NewMatcher(patterns)
+	return &GitignoreFilter{matcher: matcher, fs: fs}, nil
 }
 
-// matchGitignorePattern checks if a path matches a gitignore pattern
-func matchGitignorePattern(path, pattern string) bool {
-	// TODO: Implement proper gitignore pattern matching
-	// A very rough approximation:
-	match, _ := filepath.Match(pattern, filepath.Base(path))
-	return match
+func (g *GitignoreFilter) IsIgnored(path string) (bool, error) {
+	info, err := g.fs.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	pathParts := PathParts(path)
+	ignored := g.matcher.Match(pathParts, info.IsDir())
+	return ignored, nil
 }
