@@ -1,16 +1,17 @@
 package processor
 
 import (
+	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/dwrtz/sink/internal/filter" // for gitignore and pattern matching
-	"github.com/dwrtz/sink/internal/utils"  // for binary file detection
+	"github.com/dwrtz/sink/internal/filter"
+	"github.com/dwrtz/sink/internal/utils"
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/osfs"
 )
 
-// FileInfo represents information about a processed file
 type FileInfo struct {
 	Path     string
 	Content  string
@@ -20,35 +21,41 @@ type FileInfo struct {
 	Modified time.Time
 }
 
-// Config holds the file processor configuration
 type Config struct {
 	Paths           []string
-	GitignorePath   string
 	FilterPatterns  []string
 	ExcludePatterns []string
 	CaseSensitive   bool
+	RootDir         string // Root directory for filesystem operations
 }
 
-// FileProcessor handles the processing of files
 type FileProcessor struct {
-	config            Config
-	gitignorePatterns []string
+	config  Config
+	fs      billy.Filesystem
+	ignorer *filter.GitignoreFilter
 }
 
-// NewFileProcessor creates a new file processor with the given configuration
 func NewFileProcessor(config Config) (*FileProcessor, error) {
-	patterns, err := filter.LoadGitignorePatterns(config.GitignorePath)
+	// Create filesystem
+	fs := osfs.New(config.RootDir)
+
+	// Create GitignoreFilter using config
+	ignorer, err := filter.NewFilter(filter.GitignoreConfig{
+		RepoRoot:           config.RootDir,
+		LoadGlobalPatterns: true,
+		LoadSystemPatterns: true,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &FileProcessor{
-		config:            config,
-		gitignorePatterns: patterns,
+		config:  config,
+		fs:      fs,
+		ignorer: ignorer,
 	}, nil
 }
 
-// Process processes files based on the configured paths and returns file information
 func (fp *FileProcessor) Process() ([]FileInfo, error) {
 	var files []FileInfo
 
@@ -66,12 +73,12 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 				return nil
 			}
 
-			info, err := fp.processFile(path)
+			fileInfo, err := fp.processFile(path)
 			if err != nil {
 				return err
 			}
 
-			files = append(files, info)
+			files = append(files, fileInfo)
 			return nil
 		})
 
@@ -83,14 +90,19 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 	return files, nil
 }
 
-// processFile processes a single file and returns its information
 func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
-	stat, err := os.Stat(path)
+	info, err := fp.fs.Stat(path)
 	if err != nil {
 		return FileInfo{}, err
 	}
 
-	content, err := os.ReadFile(path)
+	file, err := fp.fs.Open(path)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -99,16 +111,16 @@ func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
 		Path:     path,
 		Content:  string(content),
 		Language: detectLanguage(path),
-		Size:     stat.Size(),
-		Created:  stat.ModTime(), // Note: Creation time not available in all OS
-		Modified: stat.ModTime(),
+		Size:     info.Size(),
+		Created:  info.ModTime(),
+		Modified: info.ModTime(),
 	}, nil
 }
 
-// shouldProcessFile determines if a file should be processed based on patterns
 func (fp *FileProcessor) shouldProcessFile(path string) bool {
-	// Check gitignore patterns
-	if filter.IsIgnored(path, fp.gitignorePatterns) {
+	// Check if file is ignored by gitignore patterns
+	ignored, err := fp.ignorer.IsIgnored(path)
+	if err != nil || ignored {
 		return false
 	}
 

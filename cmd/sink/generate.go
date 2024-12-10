@@ -15,7 +15,6 @@ import (
 func newGenerateCmd() *cobra.Command {
 	var (
 		output          string
-		gitignorePath   string
 		filterPatterns  []string
 		excludePatterns []string
 		caseSensitive   bool
@@ -49,7 +48,6 @@ func newGenerateCmd() *cobra.Command {
 			// Create file processor
 			fp, err := processor.NewFileProcessor(processor.Config{
 				Paths:           args,
-				GitignorePath:   gitignorePath,
 				FilterPatterns:  filterPatterns,
 				ExcludePatterns: excludePatterns,
 				CaseSensitive:   caseSensitive,
@@ -137,7 +135,6 @@ func newGenerateCmd() *cobra.Command {
 
 	// Add flags
 	cmd.Flags().StringVarP(&output, "output", "o", "", "Output file path")
-	cmd.Flags().StringVarP(&gitignorePath, "gitignore", "g", "", "Path to gitignore file")
 	cmd.Flags().StringSliceVarP(&filterPatterns, "filter", "f", nil, "Filter patterns to include files")
 	cmd.Flags().StringSliceVarP(&excludePatterns, "exclude", "e", nil, "Patterns to exclude files")
 	cmd.Flags().BoolVarP(&caseSensitive, "case-sensitive", "c", false, "Use case-sensitive pattern matching")
