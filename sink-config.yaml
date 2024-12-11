@@ -1,7 +1,7 @@
 # Sink Configuration File
 
 # Output settings
-output: summary.md  # Output file path
+output: sink-code.md  # Output file path
 
 # File filtering
 filter-patterns:
