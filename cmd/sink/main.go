@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dwrtz/sink/internal/config"
 	"github.com/spf13/cobra"
+)
+
+var (
+	cfgFile string
+	cfg     *config.Config
 )
 
 var rootCmd = &cobra.Command{
@@ -18,9 +24,21 @@ Example usage:
   sink analyze . --format flat
   sink generate . --tokens --price --model gpt-4`,
 	Version: "1.0.0",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		cfg, err = config.LoadConfig(cfgFile)
+		if err != nil {
+			return fmt.Errorf("error loading config: %w", err)
+		}
+
+		// Merge command line flags
+		return cfg.MergeFlagSet(cmd.Flags())
+	},
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file path")
+
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.AddCommand(newGenerateCmd())
 	rootCmd.AddCommand(newAnalyzeCmd())
