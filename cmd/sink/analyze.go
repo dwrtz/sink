@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/dwrtz/sink/internal/analyzer"
 	"github.com/dwrtz/sink/internal/processor"
@@ -17,12 +18,20 @@ func newAnalyzeCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "analyze",
+		Use:   "analyze [path]",
 		Short: "Analyze codebase structure",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			path := args[0]
+
+			// Validate path
+			if _, err := os.Stat(path); err != nil {
+				return fmt.Errorf("invalid repository path %s: %w", path, err)
+			}
+
 			// Create file processor
 			fp, err := processor.NewFileProcessor(processor.Config{
-				Paths:           args,
+				RepoRoot:        path,
 				FilterPatterns:  filterPatterns,
 				ExcludePatterns: excludePatterns,
 				CaseSensitive:   caseSensitive,

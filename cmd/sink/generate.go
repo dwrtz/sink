@@ -31,23 +31,20 @@ func newGenerateCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "generate",
+		Use:   "generate [path]",
 		Short: "Generate markdown documentation from code files",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("at least one input path is required")
-			}
+			path := args[0]
 
-			// Validate paths
-			for _, path := range args {
-				if _, err := os.Stat(path); err != nil {
-					return fmt.Errorf("invalid path %s: %w", path, err)
-				}
+			// Validate path
+			if _, err := os.Stat(path); err != nil {
+				return fmt.Errorf("invalid repository path %s: %w", path, err)
 			}
 
 			// Create file processor
 			fp, err := processor.NewFileProcessor(processor.Config{
-				Paths:           args,
+				RepoRoot:        path,
 				FilterPatterns:  filterPatterns,
 				ExcludePatterns: excludePatterns,
 				CaseSensitive:   caseSensitive,

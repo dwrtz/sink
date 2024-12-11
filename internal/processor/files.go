@@ -22,11 +22,10 @@ type FileInfo struct {
 }
 
 type Config struct {
-	Paths           []string
+	RepoRoot        string
 	FilterPatterns  []string
 	ExcludePatterns []string
 	CaseSensitive   bool
-	RootDir         string // Root directory for filesystem operations
 }
 
 type FileProcessor struct {
@@ -36,12 +35,12 @@ type FileProcessor struct {
 }
 
 func NewFileProcessor(config Config) (*FileProcessor, error) {
-	// Create filesystem
-	fs := osfs.New(config.RootDir)
+	// Create filesystem relative to repo root
+	fs := osfs.New(config.RepoRoot)
 
-	// Create GitignoreFilter using config
+	// Create GitignoreFilter using repo root
 	ignorer, err := filter.NewFilter(filter.GitignoreConfig{
-		RepoRoot:           config.RootDir,
+		RepoRoot:           config.RepoRoot,
 		LoadGlobalPatterns: true,
 		LoadSystemPatterns: true,
 	})
@@ -59,32 +58,31 @@ func NewFileProcessor(config Config) (*FileProcessor, error) {
 func (fp *FileProcessor) Process() ([]FileInfo, error) {
 	var files []FileInfo
 
-	for _, path := range fp.config.Paths {
-		err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-
-			if d.IsDir() {
-				return nil
-			}
-
-			if !fp.shouldProcessFile(path) {
-				return nil
-			}
-
-			fileInfo, err := fp.processFile(path)
-			if err != nil {
-				return err
-			}
-
-			files = append(files, fileInfo)
-			return nil
-		})
-
+	// Walk the entire repository from root
+	err := filepath.WalkDir(fp.config.RepoRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil, err
+			return err
 		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		if !fp.shouldProcessFile(path) {
+			return nil
+		}
+
+		fileInfo, err := fp.processFile(path)
+		if err != nil {
+			return err
+		}
+
+		files = append(files, fileInfo)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return files, nil

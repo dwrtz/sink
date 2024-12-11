@@ -8,15 +8,15 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "sink",
+	Use:   "sink [path]",
 	Short: "Sink - A tool for generating AI prompts from codebases",
 	Long: `Sink analyzes codebases and generates well-structured prompts for AI models.
 It supports multiple languages, comment stripping, and customizable output formats.
 
 Example usage:
-  sink generate ./src -o output.md
-  sink analyze ./src --format flat
-  sink generate ./src --tokens --price --model gpt-4`,
+  sink generate . -o output.md
+  sink analyze . --format flat
+  sink generate . --tokens --price --model gpt-4`,
 	Version: "1.0.0",
 }
 
