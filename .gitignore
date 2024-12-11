@@ -1,4 +1,5 @@
 .vscode/
+out/
 
-sink
 output.md
+summary.md

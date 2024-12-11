@@ -5,11 +5,11 @@ Sink is a tool for generating AI prompts from codebases.
 ## Building
 
 ```sh
-go build -o sink ./cmd/sink
+go build -o ./out/sink ./cmd/sink
 ```
 
 ## Usage
 
 ```sh
-sink generate ./src -o output.md
+./out/sink generate . -o output.md -f "*.go" --tokens
 ```
