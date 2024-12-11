@@ -1,17 +1,20 @@
 # Sink Configuration File
 
 # Output settings
-output: output.md  # Output file path
+output: summary.md  # Output file path
 
 # File filtering
 filter-patterns:
   - "*.go"
+  - "*.md"
+  - "*.yaml"
 exclude-patterns:
+  - "examples/**"
 case-sensitive: false
 
 # Processing options
 no-codeblock: false
-line-numbers: true
+line-numbers: false
 strip-comments: false
 
 # Token settings
@@ -30,6 +33,7 @@ syntax-map:
   ".tsx": "typescript"
   ".mjs": "javascript"
   ".cjs": "javascript"
+  ".md": "markdown"
 
 # Template settings
 template-path: ""  # Path to custom template file

@@ -10,13 +10,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type analyzeFlags struct {
+	format          string
+	filterPatterns  []string
+	excludePatterns []string
+	caseSensitive   bool
+	showTokens      bool
+}
+
 func newAnalyzeCmd() *cobra.Command {
-	var format string
+	flags := &analyzeFlags{}
 
 	cmd := &cobra.Command{
 		Use:   "analyze [path]",
 		Short: "Analyze codebase structure",
 		Args:  cobra.ExactArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			// Only override config values if flags were explicitly set
+			if cmd.Flags().Changed("filter") {
+				cfg.FilterPatterns = flags.filterPatterns
+			}
+			if cmd.Flags().Changed("exclude") {
+				cfg.ExcludePatterns = flags.excludePatterns
+			}
+			if cmd.Flags().Changed("case-sensitive") {
+				cfg.CaseSensitive = flags.caseSensitive
+			}
+			if cmd.Flags().Changed("tokens") {
+				cfg.ShowTokens = flags.showTokens
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := args[0]
 
@@ -57,12 +81,12 @@ func newAnalyzeCmd() *cobra.Command {
 			}
 
 			// Output results based on format
-			if format == "flat" {
+			if flags.format == "flat" {
 				fmt.Println(a.FormatFlat(stats))
-			} else if format == "tree" {
+			} else if flags.format == "tree" {
 				fmt.Println(a.FormatFlat(stats)) // TODO: implement a.FormatTree
 			} else {
-				return fmt.Errorf("invalid format: %s (must be 'flat' or 'tree')", format)
+				return fmt.Errorf("invalid format: %s (must be 'flat' or 'tree')", flags.format)
 			}
 
 			// Print extension list
@@ -85,15 +109,12 @@ func newAnalyzeCmd() *cobra.Command {
 		},
 	}
 
-	// Add analyze-specific flags
-	cmd.Flags().StringVarP(&format, "format", "f", "flat", "Output format (flat or tree)")
-
-	// These flags are inherited from the root command via the global config,
-	// but we can add them here for command-specific help
-	cmd.Flags().StringSliceVarP(&cfg.FilterPatterns, "filter", "i", nil, "Filter patterns to include files")
-	cmd.Flags().StringSliceVarP(&cfg.ExcludePatterns, "exclude", "e", nil, "Patterns to exclude files")
-	cmd.Flags().BoolVarP(&cfg.CaseSensitive, "case-sensitive", "c", false, "Use case-sensitive pattern matching")
-	cmd.Flags().BoolVar(&cfg.ShowTokens, "tokens", false, "Show total token count")
+	// Add flags bound to the local flags struct
+	cmd.Flags().StringVarP(&flags.format, "format", "f", "flat", "Output format (flat or tree)")
+	cmd.Flags().StringSliceVarP(&flags.filterPatterns, "filter", "i", nil, "Filter patterns to include files")
+	cmd.Flags().StringSliceVarP(&flags.excludePatterns, "exclude", "e", nil, "Patterns to exclude files")
+	cmd.Flags().BoolVarP(&flags.caseSensitive, "case-sensitive", "c", false, "Use case-sensitive pattern matching")
+	cmd.Flags().BoolVar(&flags.showTokens, "tokens", false, "Show total token count")
 
 	return cmd
 }

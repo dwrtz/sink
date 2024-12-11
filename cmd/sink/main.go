@@ -13,6 +13,7 @@ var (
 	cfg     *config.Config
 )
 
+// rootCmd represents the base command
 var rootCmd = &cobra.Command{
 	Use:   "sink [path]",
 	Short: "Sink - A tool for generating AI prompts from codebases",
@@ -24,38 +25,40 @@ Example usage:
   sink analyze . --format flat
   sink generate . --tokens --price --model gpt-4`,
 	Version: "1.0.0",
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-
-		// Load configuration
-		cfg, err = config.LoadConfig(cfgFile)
-		if err != nil {
-			return fmt.Errorf("error loading config: %w", err)
-		}
-
-		// Merge command line flags
-		if err := cfg.MergeFlagSet(cmd.Flags()); err != nil {
-			return fmt.Errorf("error merging command line flags: %w", err)
-		}
-
-		// Validate the final configuration
-		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("invalid configuration: %w", err)
-		}
-
-		return nil
-	},
 }
 
-func init() {
+func initConfig() error {
+	var err error
+	cfg, err = config.LoadConfig(cfgFile)
+	if err != nil {
+		return fmt.Errorf("error loading config: %w", err)
+	}
+	return nil
+}
+
+func initialize() {
+	// Add persistent flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file path")
 
+	// Disable default completion command
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
+	// Initialize config before adding subcommands
+	cobra.OnInitialize(func() {
+		if err := initConfig(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
+			os.Exit(1)
+		}
+	})
+
+	// Add subcommands after config initialization
 	rootCmd.AddCommand(newGenerateCmd())
 	rootCmd.AddCommand(newAnalyzeCmd())
 }
 
 func main() {
+	initialize()
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
