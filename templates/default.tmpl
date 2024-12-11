@@ -1,0 +1,19 @@
+# Table of Contents
+{{- range .Files }}
+- {{ .Path }}
+{{- end }}
+{{ range .Files }}
+## File: {{ .Path }}
+
+- Extension: {{ .Ext }}
+- Language: {{ .Language }}
+- Size: {{ .Size }} bytes
+- Created: {{ .Created.Format "2006-01-02 15:04:05" }}
+- Modified: {{ .Modified.Format "2006-01-02 15:04:05" }}
+
+### Code
+
+````{{ .Language }}
+{{ .Content }}
+````
+{{ end }}

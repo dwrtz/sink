@@ -2,7 +2,6 @@ package markdown
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/dwrtz/sink/internal/processor"
@@ -47,7 +46,7 @@ func (g *Generator) generateFileSection(file processor.FileInfo) string {
 
 	// File header
 	section.WriteString(fmt.Sprintf("## File: %s\n\n", file.Path))
-	section.WriteString(fmt.Sprintf("- Extension: %s\n", filepath.Ext(file.Path)))
+	section.WriteString(fmt.Sprintf("- Extension: %s\n", file.Ext))
 	section.WriteString(fmt.Sprintf("- Language: %s\n", file.Language))
 	section.WriteString(fmt.Sprintf("- Size: %d bytes\n", file.Size))
 	section.WriteString(fmt.Sprintf("- Created: %s\n", file.Created.Format("2006-01-02 15:04:05")))
@@ -65,7 +64,7 @@ func (g *Generator) generateFileSection(file processor.FileInfo) string {
 	}
 
 	if !g.config.NoCodeBlock {
-		section.WriteString(fmt.Sprintf("```%s\n%s\n```\n\n", file.Language, content))
+		section.WriteString(fmt.Sprintf("````%s\n%s\n````\n\n", file.Language, content))
 	} else {
 		section.WriteString(fmt.Sprintf("%s\n\n", content))
 	}

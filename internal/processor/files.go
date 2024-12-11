@@ -16,6 +16,7 @@ import (
 
 type FileInfo struct {
 	Path     string
+	Ext      string
 	Content  string
 	Language string
 	Size     int64
@@ -132,6 +133,7 @@ func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
 
 	return FileInfo{
 		Path:     path,
+		Ext:      filepath.Ext(path),
 		Content:  string(content),
 		Language: fp.detectLanguage(path),
 		Size:     info.Size(),
