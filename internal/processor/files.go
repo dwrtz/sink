@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"path/filepath"
@@ -65,6 +66,27 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 		}
 
 		if d.IsDir() {
+			// Skip .git directory entirely
+			if d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+
+			// Check if directory matches gitignore patterns
+			ignored, err := fp.ignorer.IsIgnored(path)
+			if err != nil {
+				fmt.Printf("Error checking if directory is ignored: %v\n", err)
+				return err
+			}
+			if ignored {
+				return filepath.SkipDir
+			}
+
+			// Check directory against exclude patterns
+			if len(fp.config.ExcludePatterns) > 0 &&
+				filter.MatchesAny(path, fp.config.ExcludePatterns, fp.config.CaseSensitive) {
+				return filepath.SkipDir
+			}
+
 			return nil
 		}
 
@@ -74,6 +96,7 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 
 		fileInfo, err := fp.processFile(path)
 		if err != nil {
+			fmt.Printf("Error processing file %s: %v\n", path, err)
 			return err
 		}
 
