@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dwrtz/sink/internal/filter"
@@ -138,6 +139,8 @@ func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
 	}, nil
 }
 
+// shouldProcessFile determines whether a file should be processed based on
+// various filtering criteria.
 func (fp *FileProcessor) shouldProcessFile(path string) bool {
 	// Check if file is ignored by gitignore patterns
 	ignored, err := fp.ignorer.IsIgnored(path)
@@ -145,15 +148,59 @@ func (fp *FileProcessor) shouldProcessFile(path string) bool {
 		return false
 	}
 
-	// Check if file matches filter patterns
-	if len(fp.config.FilterPatterns) > 0 && !filter.MatchesAny(path, fp.config.FilterPatterns, fp.config.CaseSensitive) {
+	// Check if file is binary
+	if utils.IsBinaryFile(path) {
 		return false
 	}
 
-	// Check if file matches exclude patterns
-	if len(fp.config.ExcludePatterns) > 0 && filter.MatchesAny(path, fp.config.ExcludePatterns, fp.config.CaseSensitive) {
+	// If no filter patterns specified, only exclude patterns matter
+	if len(fp.config.FilterPatterns) == 0 {
+		// Check exclude patterns if any
+		if len(fp.config.ExcludePatterns) > 0 {
+			return !matchesAnyPattern(path, fp.config.ExcludePatterns, fp.config.CaseSensitive)
+		}
+		return true
+	}
+
+	// If we have filter patterns, file must match at least one
+	if !matchesAnyPattern(path, fp.config.FilterPatterns, fp.config.CaseSensitive) {
 		return false
 	}
 
-	return !utils.IsBinaryFile(path)
+	// Finally check exclude patterns
+	if len(fp.config.ExcludePatterns) > 0 {
+		return !matchesAnyPattern(path, fp.config.ExcludePatterns, fp.config.CaseSensitive)
+	}
+
+	return true
+}
+
+// matchesAnyPattern checks if a path matches any of the given glob patterns
+func matchesAnyPattern(path string, patterns []string, caseSensitive bool) bool {
+	if !caseSensitive {
+		path = strings.ToLower(path)
+	}
+
+	for _, pattern := range patterns {
+		if !caseSensitive {
+			pattern = strings.ToLower(pattern)
+		}
+
+		// Handle both relative and absolute paths
+		_, filename := filepath.Split(path)
+
+		// Try matching against full path
+		matched, err := filepath.Match(pattern, path)
+		if err == nil && matched {
+			return true
+		}
+
+		// Try matching against just the filename
+		matched, err = filepath.Match(pattern, filename)
+		if err == nil && matched {
+			return true
+		}
+	}
+
+	return false
 }

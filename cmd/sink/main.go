@@ -21,6 +21,7 @@ Example usage:
 }
 
 func init() {
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.AddCommand(newGenerateCmd())
 	rootCmd.AddCommand(newAnalyzeCmd())
 }
