@@ -6,16 +6,12 @@ import (
 
 	"github.com/dwrtz/sink/internal/analyzer"
 	"github.com/dwrtz/sink/internal/processor"
+	"github.com/dwrtz/sink/internal/tokens"
 	"github.com/spf13/cobra"
 )
 
 func newAnalyzeCmd() *cobra.Command {
-	var (
-		format          string
-		filterPatterns  []string
-		excludePatterns []string
-		caseSensitive   bool
-	)
+	var format string
 
 	cmd := &cobra.Command{
 		Use:   "analyze [path]",
@@ -29,12 +25,13 @@ func newAnalyzeCmd() *cobra.Command {
 				return fmt.Errorf("invalid repository path %s: %w", path, err)
 			}
 
-			// Create file processor
+			// Create file processor using the global config
 			fp, err := processor.NewFileProcessor(processor.Config{
 				RepoRoot:        path,
-				FilterPatterns:  filterPatterns,
-				ExcludePatterns: excludePatterns,
-				CaseSensitive:   caseSensitive,
+				FilterPatterns:  cfg.FilterPatterns,
+				ExcludePatterns: cfg.ExcludePatterns,
+				CaseSensitive:   cfg.CaseSensitive,
+				SyntaxMap:       cfg.SyntaxMap,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create file processor: %w", err)
@@ -62,23 +59,50 @@ func newAnalyzeCmd() *cobra.Command {
 			// Output results based on format
 			if format == "flat" {
 				fmt.Println(a.FormatFlat(stats))
+			} else if format == "tree" {
+				fmt.Println(a.FormatFlat(stats)) // TODO: implement a.FormatTree
 			} else {
-				// Tree format not implemented yet
-				return fmt.Errorf("tree format not implemented")
+				return fmt.Errorf("invalid format: %s (must be 'flat' or 'tree')", format)
 			}
 
 			// Print extension list
 			fmt.Printf("\nExtensions: %s\n", a.GetExtensionList(stats))
 
+			// Add token counting if enabled
+			if cfg.ShowTokens {
+				totalTokens := 0
+				for _, file := range files {
+					tokens, err := countFileTokens(file.Content, cfg.TokenEncoding)
+					if err != nil {
+						return fmt.Errorf("failed to count tokens: %w", err)
+					}
+					totalTokens += tokens
+				}
+				fmt.Printf("\nTotal tokens in codebase: %d\n", totalTokens)
+			}
+
 			return nil
 		},
 	}
 
-	// Add flags
+	// Add analyze-specific flags
 	cmd.Flags().StringVarP(&format, "format", "f", "flat", "Output format (flat or tree)")
-	cmd.Flags().StringSliceVarP(&filterPatterns, "filter", "i", nil, "Filter patterns to include files")
-	cmd.Flags().StringSliceVarP(&excludePatterns, "exclude", "e", nil, "Patterns to exclude files")
-	cmd.Flags().BoolVarP(&caseSensitive, "case-sensitive", "c", false, "Use case-sensitive pattern matching")
+
+	// These flags are inherited from the root command via the global config,
+	// but we can add them here for command-specific help
+	cmd.Flags().StringSliceVarP(&cfg.FilterPatterns, "filter", "i", nil, "Filter patterns to include files")
+	cmd.Flags().StringSliceVarP(&cfg.ExcludePatterns, "exclude", "e", nil, "Patterns to exclude files")
+	cmd.Flags().BoolVarP(&cfg.CaseSensitive, "case-sensitive", "c", false, "Use case-sensitive pattern matching")
+	cmd.Flags().BoolVar(&cfg.ShowTokens, "tokens", false, "Show total token count")
 
 	return cmd
+}
+
+// countFileTokens helper function to count tokens in a file
+func countFileTokens(content, encoding string) (int, error) {
+	counter, err := tokens.NewCounter(encoding)
+	if err != nil {
+		return 0, err
+	}
+	return counter.Count(content)
 }

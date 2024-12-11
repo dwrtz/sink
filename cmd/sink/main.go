@@ -26,13 +26,24 @@ Example usage:
 	Version: "1.0.0",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var err error
+
+		// Load configuration
 		cfg, err = config.LoadConfig(cfgFile)
 		if err != nil {
 			return fmt.Errorf("error loading config: %w", err)
 		}
 
 		// Merge command line flags
-		return cfg.MergeFlagSet(cmd.Flags())
+		if err := cfg.MergeFlagSet(cmd.Flags()); err != nil {
+			return fmt.Errorf("error merging command line flags: %w", err)
+		}
+
+		// Validate the final configuration
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("invalid configuration: %w", err)
+		}
+
+		return nil
 	},
 }
 

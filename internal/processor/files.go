@@ -28,6 +28,7 @@ type Config struct {
 	FilterPatterns  []string
 	ExcludePatterns []string
 	CaseSensitive   bool
+	SyntaxMap       map[string]string
 }
 
 type FileProcessor struct {
@@ -132,7 +133,7 @@ func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
 	return FileInfo{
 		Path:     path,
 		Content:  string(content),
-		Language: detectLanguage(path),
+		Language: fp.detectLanguage(path),
 		Size:     info.Size(),
 		Created:  info.ModTime(),
 		Modified: info.ModTime(),
@@ -203,4 +204,32 @@ func matchesAnyPattern(path string, patterns []string, caseSensitive bool) bool 
 	}
 
 	return false
+}
+
+func (fp *FileProcessor) detectLanguage(path string) string {
+	ext := filepath.Ext(path)
+
+	// Check syntax map first
+	if lang, ok := fp.config.SyntaxMap[ext]; ok {
+		return lang
+	}
+
+	// Fall back to default language detection
+	switch ext {
+	case ".go":
+		return "go"
+	case ".py":
+		return "python"
+	case ".js":
+		return "javascript"
+	case ".java":
+		return "java"
+	case ".cpp", ".hpp", ".cc", ".hh":
+		return "cpp"
+	case ".c", ".h":
+		return "c"
+	// Add more language mappings as needed
+	default:
+		return "unknown"
+	}
 }
