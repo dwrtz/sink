@@ -24,7 +24,7 @@ Example usage:
   sink generate . -o output.md
   sink analyze . --format flat
   sink generate . --tokens --price --model gpt-4`,
-	Version: "1.0.0",
+	Version: "0.1.0",
 }
 
 func initConfig() error {
