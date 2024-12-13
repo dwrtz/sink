@@ -1,7 +1,6 @@
 package filter
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -54,7 +53,6 @@ func PathParts(p string) []string {
 // NewGitignoreFilter creates a new GitignoreFilter
 func NewFilter(config GitignoreConfig) (*GitignoreFilter, error) {
 	fs := osfs.New(config.RepoRoot)
-	fmt.Println("Creating fs at", fs.Root())
 	patterns, err := gitignore.ReadPatterns(fs, []string{})
 	if err != nil {
 		return nil, err
