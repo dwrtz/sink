@@ -3,6 +3,7 @@ module github.com/dwrtz/sink
 go 1.22.3
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.7.1
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.12.0
