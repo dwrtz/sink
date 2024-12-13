@@ -436,7 +436,7 @@ func (s *Service) shouldWatchDirectory(path string) bool {
 // Helper functions
 
 func isCriticalError(err error) bool {
-	// Add logic to determine if an error is critical
+	// TODO: Add logic to determine if an error is critical
 	// For example, permission errors or watcher resource exhaustion
 	fmt.Println("isCriticalError", err)
 	return false // Placeholder implementation
