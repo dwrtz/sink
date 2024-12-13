@@ -199,8 +199,13 @@ func (s *Service) handleEvent(event fsnotify.Event) error {
 
 	// Handle config file changes separately
 	if event.Name == s.configPath && !s.reloading {
-		s.logger.Println("Config file changed, reloading...")
-		return s.handleConfigChange()
+		if event.Op&fsnotify.Write == fsnotify.Write {
+			s.logger.Println("Config file changed, reloading...")
+			return s.handleConfigChange()
+		} else {
+			// Ignore CHMOD or other events on the config file
+			return nil
+		}
 	}
 
 	// Check if we should process this file
@@ -291,32 +296,30 @@ func (s *Service) handleRename(path string) error {
 
 func (s *Service) handleConfigChange() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.reloading = true
-	defer func() { s.reloading = false }()
 
-	// Load the new configuration
 	newConfig, err := config.LoadConfig("")
 	if err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("error reloading config: %w", err)
 	}
-
-	// Update the configuration
 	s.config.RepoConfig = newConfig
 
-	// Reconfigure the watcher with the new settings
 	if err := s.reconfigureWatcher(); err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("error reconfiguring watcher: %w", err)
 	}
 
-	// Re-add watch for config file itself
 	if s.configPath != "" {
 		if err := s.watcher.Add(s.configPath); err != nil {
+			s.mu.Unlock()
 			return fmt.Errorf("error re-adding watch for config file: %w", err)
 		}
 		s.watched[s.configPath] = &watchedPath{path: s.configPath, dir: false}
 	}
+
+	s.reloading = false
+	s.mu.Unlock()
 
 	return s.triggerRegeneration()
 }
@@ -332,16 +335,11 @@ func (s *Service) handleWatchError(err error) error {
 }
 
 func (s *Service) reconfigureWatcher() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Remove all existing watches
 	for path := range s.watched {
 		s.watcher.Remove(path)
 	}
 	s.watched = make(map[string]*watchedPath)
 
-	// Add watches for all directories that match the new configuration
 	if err := s.addWatchRecursive(s.config.RootPath); err != nil {
 		return fmt.Errorf("failed to add watches: %w", err)
 	}
@@ -376,22 +374,29 @@ func (s *Service) addWatchRecursive(root string) error {
 
 func (s *Service) triggerRegeneration() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.logger.Println("Triggering regeneration...")
 
-	// Reset the debouncer
-	s.debouncer.Reset(s.config.DebounceTimeout)
+	// Stop the timer first
+	if !s.debouncer.Stop() {
+		// Timer already fired, drain the channel
+		select {
+		case <-s.debouncer.C:
+		default:
+		}
+	}
 
-	// Wait for debounce timeout
+	// Now reset the timer to the configured debounce duration
+	s.debouncer.Reset(s.config.DebounceTimeout)
+	s.mu.Unlock()
+
+	// Spawn a goroutine to wait for the debounce to expire and then regenerate
 	go func() {
 		<-s.debouncer.C
 		s.logger.Println("Debounce timeout reached, regenerating...")
 		if err := s.Generate(); err != nil {
-			s.logger.Printf("Failed to regenerate documentation: %v", err)
+			s.logger.Printf("Failed to regenerate: %v", err)
 		}
 	}()
-
 	return nil
 }
 
