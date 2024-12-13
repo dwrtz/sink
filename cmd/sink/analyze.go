@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/dwrtz/sink/internal/analyzer"
 	"github.com/dwrtz/sink/internal/processor"
@@ -49,9 +50,15 @@ func newAnalyzeCmd() *cobra.Command {
 				return fmt.Errorf("invalid repository path %s: %w", path, err)
 			}
 
+			// Make path absolute
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				return fmt.Errorf("failed to get absolute path: %w", err)
+			}
+
 			// Create file processor using the global config
 			fp, err := processor.NewFileProcessor(processor.Config{
-				RepoRoot:        path,
+				RepoRoot:        absPath,
 				FilterPatterns:  cfg.FilterPatterns,
 				ExcludePatterns: cfg.ExcludePatterns,
 				CaseSensitive:   cfg.CaseSensitive,

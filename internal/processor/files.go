@@ -74,8 +74,13 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 				return filepath.SkipDir
 			}
 
+			relPath, err := filepath.Rel(fp.fs.Root(), path)
+			if err != nil {
+				return err
+			}
+
 			// Check if directory matches gitignore patterns
-			ignored, err := fp.ignorer.IsIgnored(path)
+			ignored, err := fp.ignorer.IsIgnored(relPath)
 			if err != nil {
 				fmt.Printf("Error checking if directory is ignored: %v\n", err)
 				return err
@@ -86,7 +91,7 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 
 			// Check directory against exclude patterns
 			if len(fp.config.ExcludePatterns) > 0 &&
-				filter.MatchesAny(path, fp.config.ExcludePatterns, fp.config.CaseSensitive) {
+				filter.MatchesAny(relPath, fp.config.ExcludePatterns, fp.config.CaseSensitive) {
 				return filepath.SkipDir
 			}
 
@@ -115,12 +120,17 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 }
 
 func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
-	info, err := fp.fs.Stat(path)
+	relPath, err := filepath.Rel(fp.fs.Root(), path)
 	if err != nil {
 		return FileInfo{}, err
 	}
 
-	file, err := fp.fs.Open(path)
+	info, err := fp.fs.Stat(relPath)
+	if err != nil {
+		return FileInfo{}, err
+	}
+
+	file, err := fp.fs.Open(relPath)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -145,14 +155,19 @@ func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
 // shouldProcessFile determines whether a file should be processed based on
 // various filtering criteria.
 func (fp *FileProcessor) shouldProcessFile(path string) bool {
-	// Check if file is ignored by gitignore patterns
-	ignored, err := fp.ignorer.IsIgnored(path)
-	if err != nil || ignored {
+	// Check if file is binary
+	if utils.IsBinaryFile(path) {
 		return false
 	}
 
-	// Check if file is binary
-	if utils.IsBinaryFile(path) {
+	relPath, err := filepath.Rel(fp.fs.Root(), path)
+	if err != nil {
+		return false
+	}
+
+	// Check if file is ignored by gitignore patterns
+	ignored, err := fp.ignorer.IsIgnored(relPath)
+	if err != nil || ignored {
 		return false
 	}
 
@@ -160,19 +175,19 @@ func (fp *FileProcessor) shouldProcessFile(path string) bool {
 	if len(fp.config.FilterPatterns) == 0 {
 		// Check exclude patterns if any
 		if len(fp.config.ExcludePatterns) > 0 {
-			return !matchesAnyPattern(path, fp.config.ExcludePatterns, fp.config.CaseSensitive)
+			return !matchesAnyPattern(relPath, fp.config.ExcludePatterns, fp.config.CaseSensitive)
 		}
 		return true
 	}
 
 	// If we have filter patterns, file must match at least one
-	if !matchesAnyPattern(path, fp.config.FilterPatterns, fp.config.CaseSensitive) {
+	if !matchesAnyPattern(relPath, fp.config.FilterPatterns, fp.config.CaseSensitive) {
 		return false
 	}
 
 	// Finally check exclude patterns
 	if len(fp.config.ExcludePatterns) > 0 {
-		return !matchesAnyPattern(path, fp.config.ExcludePatterns, fp.config.CaseSensitive)
+		return !matchesAnyPattern(relPath, fp.config.ExcludePatterns, fp.config.CaseSensitive)
 	}
 
 	return true

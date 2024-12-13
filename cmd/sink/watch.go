@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/dwrtz/sink/internal/generator"
+	"github.com/dwrtz/sink/internal/watcher"
 	"github.com/spf13/cobra"
 )
 
-type generateFlags struct {
+type watchFlags struct {
 	output          string
 	filterPatterns  []string
 	excludePatterns []string
@@ -24,17 +26,32 @@ type generateFlags struct {
 	provider        string
 	model           string
 	outputTokens    int
+	debounceMs      int
 }
 
-func newGenerateCmd() *cobra.Command {
-	flags := &generateFlags{}
+func newWatchCmd() *cobra.Command {
+	flags := &watchFlags{}
 
 	cmd := &cobra.Command{
-		Use:   "generate [path]",
-		Short: "Generate markdown documentation from code files",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Update config with any explicitly set flags
+		Use:   "watch [path]",
+		Short: "Watch a directory and regenerate documentation on changes",
+		Long: `Watch a directory and its subdirectories for changes and automatically
+regenerate documentation when files are modified. Applies the same filtering
+rules as the generate command.
+
+Examples:
+  sink watch . -o output.md
+  sink watch . --filter "*.go,*.md" --debounce 1000`,
+		Args: cobra.ExactArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			// Convert path to absolute to ensure consistent watching
+			absPath, err := filepath.Abs(args[0])
+			if err != nil {
+				return fmt.Errorf("failed to resolve absolute path: %w", err)
+			}
+			args[0] = absPath
+
+			// Update config with CLI flags if they were explicitly set
 			if cmd.Flags().Changed("output") {
 				cfg.Output = flags.output
 			}
@@ -78,29 +95,41 @@ func newGenerateCmd() *cobra.Command {
 				cfg.OutputTokens = flags.outputTokens
 			}
 
-			path := args[0]
-
-			// Validate path
-			if _, err := os.Stat(path); err != nil {
-				return fmt.Errorf("invalid repository path %s: %w", path, err)
+			// Validate the path exists
+			if _, err := os.Stat(args[0]); err != nil {
+				return fmt.Errorf("invalid path %s: %w", args[0], err)
 			}
 
-			// Make path absolute
-			absPath, err := filepath.Abs(path)
-			if err != nil {
-				return fmt.Errorf("failed to get absolute path: %w", err)
-			}
-
-			err = generator.RunGeneration(cfg, absPath)
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := generator.RunGeneration(cfg, args[0])
 			if err != nil {
 				return fmt.Errorf("failed to generate file: %w", err)
+			}
+
+			watchService, err := watcher.NewService(watcher.Config{
+				RootPath:        args[0],
+				RepoConfig:      cfg,
+				DebounceTimeout: time.Duration(flags.debounceMs) * time.Millisecond,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create watch service: %w", err)
+			}
+
+			fmt.Printf("Watching %s for changes...\n", args[0])
+			fmt.Println("Press Ctrl+C to stop")
+
+			// Watch will block until interrupted
+			if err := watchService.Watch(); err != nil {
+				return fmt.Errorf("watch service error: %w", err)
 			}
 
 			return nil
 		},
 	}
 
-	// Add flags bound to the local flags struct
+	// Add flags
 	cmd.Flags().StringVarP(&flags.output, "output", "o", "", "Output file path")
 	cmd.Flags().StringSliceVarP(&flags.filterPatterns, "filter", "f", nil, "Filter patterns to include files")
 	cmd.Flags().StringSliceVarP(&flags.excludePatterns, "exclude", "e", nil, "Patterns to exclude files")
@@ -115,6 +144,7 @@ func newGenerateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.provider, "provider", "openai", "Provider for price estimation")
 	cmd.Flags().StringVar(&flags.model, "model", "gpt-3.5-turbo", "Model for price estimation")
 	cmd.Flags().IntVar(&flags.outputTokens, "output-tokens", 1000, "Expected number of output tokens")
+	cmd.Flags().IntVar(&flags.debounceMs, "debounce", 500, "Debounce timeout in milliseconds")
 
 	return cmd
 }

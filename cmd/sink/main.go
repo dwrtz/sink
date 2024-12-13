@@ -54,6 +54,7 @@ func initialize() {
 	// Add subcommands after config initialization
 	rootCmd.AddCommand(newGenerateCmd())
 	rootCmd.AddCommand(newAnalyzeCmd())
+	rootCmd.AddCommand(newWatchCmd())
 }
 
 func main() {
