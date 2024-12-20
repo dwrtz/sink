@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/fs"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/dwrtz/sink/internal/filter"
@@ -175,52 +174,22 @@ func (fp *FileProcessor) shouldProcessFile(path string) bool {
 	if len(fp.config.FilterPatterns) == 0 {
 		// Check exclude patterns if any
 		if len(fp.config.ExcludePatterns) > 0 {
-			return !matchesAnyPattern(relPath, fp.config.ExcludePatterns, fp.config.CaseSensitive)
+			return !filter.MatchesAny(relPath, fp.config.ExcludePatterns, fp.config.CaseSensitive)
 		}
 		return true
 	}
 
 	// If we have filter patterns, file must match at least one
-	if !matchesAnyPattern(relPath, fp.config.FilterPatterns, fp.config.CaseSensitive) {
+	if !filter.MatchesAny(relPath, fp.config.FilterPatterns, fp.config.CaseSensitive) {
 		return false
 	}
 
 	// Finally check exclude patterns
 	if len(fp.config.ExcludePatterns) > 0 {
-		return !matchesAnyPattern(relPath, fp.config.ExcludePatterns, fp.config.CaseSensitive)
+		return !filter.MatchesAny(relPath, fp.config.ExcludePatterns, fp.config.CaseSensitive)
 	}
 
 	return true
-}
-
-// matchesAnyPattern checks if a path matches any of the given glob patterns
-func matchesAnyPattern(path string, patterns []string, caseSensitive bool) bool {
-	if !caseSensitive {
-		path = strings.ToLower(path)
-	}
-
-	for _, pattern := range patterns {
-		if !caseSensitive {
-			pattern = strings.ToLower(pattern)
-		}
-
-		// Handle both relative and absolute paths
-		_, filename := filepath.Split(path)
-
-		// Try matching against full path
-		matched, err := filepath.Match(pattern, path)
-		if err == nil && matched {
-			return true
-		}
-
-		// Try matching against just the filename
-		matched, err = filepath.Match(pattern, filename)
-		if err == nil && matched {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (fp *FileProcessor) detectLanguage(path string) string {
