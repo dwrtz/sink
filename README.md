@@ -84,7 +84,6 @@ Sink looks for a `sink-config.yaml` file for default configurations. In this fil
 
 - Filters and exclude patterns
 - Template paths for custom Markdown formatting
-- Other options like token encodings, providers, and models for price estimation
 
 See the [example config](./examples/sink-config.yaml) for more details.
 
