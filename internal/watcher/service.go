@@ -254,11 +254,11 @@ func (s *Service) handleCreate(path string) error {
 
 func (s *Service) handleRemove(path string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	watched, exists := s.watched[path]
 	if !exists {
 		// Path wasn't being watched
+		s.mu.Unlock()
 		return s.triggerRegeneration()
 	}
 
@@ -282,6 +282,7 @@ func (s *Service) handleRemove(path string) error {
 		}
 	}
 
+	s.mu.Unlock()
 	return s.triggerRegeneration()
 }
 
