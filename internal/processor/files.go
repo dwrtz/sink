@@ -1,10 +1,12 @@
 package processor
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dwrtz/sink/internal/filter"
@@ -37,6 +39,9 @@ type FileProcessor struct {
 	ignorer *filter.GitignoreFilter
 }
 
+// sentinel error so we can detect when to skip a “file”
+var errSkipFile = errors.New("skip this file or directory")
+
 func NewFileProcessor(config Config) (*FileProcessor, error) {
 	// Create filesystem relative to repo root
 	fs := osfs.New(config.RepoRoot)
@@ -67,6 +72,7 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 			return err
 		}
 
+		// If it's a directory, skip .git or any directory that matches excludes
 		if d.IsDir() {
 			// Skip .git directory entirely
 			if d.Name() == ".git" {
@@ -78,11 +84,11 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 				return err
 			}
 
-			// Check if directory matches gitignore patterns
-			ignored, err := fp.ignorer.IsIgnored(relPath)
-			if err != nil {
-				fmt.Printf("Error checking if directory is ignored: %v\n", err)
-				return err
+			// Check if directory is ignored by gitignore
+			ignored, ignErr := fp.ignorer.IsIgnored(relPath)
+			if ignErr != nil {
+				fmt.Printf("Error checking if directory is ignored: %v\n", ignErr)
+				return ignErr
 			}
 			if ignored {
 				return filepath.SkipDir
@@ -97,14 +103,21 @@ func (fp *FileProcessor) Process() ([]FileInfo, error) {
 			return nil
 		}
 
+		// If we got here, we have a non-dir (d.IsDir() == false), or a symlink, etc.
 		if !fp.shouldProcessFile(path) {
+			// Don’t abort entire walk, just skip
 			return nil
 		}
 
-		fileInfo, err := fp.processFile(path)
-		if err != nil {
-			fmt.Printf("Error processing file %s: %v\n", path, err)
-			return err
+		fileInfo, fileErr := fp.processFile(path)
+		if fileErr != nil {
+			// We intentionally skip files with our sentinel error
+			if errors.Is(fileErr, errSkipFile) {
+				return nil
+			}
+			// For other errors, return up the chain
+			fmt.Printf("Error processing file %s: %v\n", path, fileErr)
+			return fileErr
 		}
 
 		files = append(files, fileInfo)
@@ -129,8 +142,19 @@ func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
 		return FileInfo{}, err
 	}
 
+	// **Double-check**: if it's a directory (or symlink to a directory), skip
+	if info.IsDir() {
+		// Return our sentinel, so the caller can ignore it
+		return FileInfo{}, errSkipFile
+	}
+
+	// Try opening as a file
 	file, err := fp.fs.Open(relPath)
 	if err != nil {
+		// If the OS says “is a directory”, treat as skip
+		if isDirOpenError(err) {
+			return FileInfo{}, errSkipFile
+		}
 		return FileInfo{}, err
 	}
 	defer file.Close()
@@ -151,8 +175,13 @@ func (fp *FileProcessor) processFile(path string) (FileInfo, error) {
 	}, nil
 }
 
-// shouldProcessFile determines whether a file should be processed based on
-// various filtering criteria.
+// Helper to detect “is a directory” errors from the OS
+func isDirOpenError(err error) bool {
+	return strings.Contains(err.Error(), "is a directory")
+}
+
+// shouldProcessFile determines whether a path should be processed based on
+// binary check and filter/exclude patterns.
 func (fp *FileProcessor) shouldProcessFile(path string) bool {
 	// Check if file is binary
 	if utils.IsBinaryFile(path) {
@@ -200,7 +229,7 @@ func (fp *FileProcessor) detectLanguage(path string) string {
 		return lang
 	}
 
-	// Fall back to default language detection
+	// Fall back to a small set of known file types
 	switch ext {
 	case ".go":
 		return "go"
@@ -214,7 +243,6 @@ func (fp *FileProcessor) detectLanguage(path string) string {
 		return "cpp"
 	case ".c", ".h":
 		return "c"
-	// Add more language mappings as needed
 	default:
 		return "unknown"
 	}
