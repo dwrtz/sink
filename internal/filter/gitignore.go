@@ -52,14 +52,20 @@ func PathParts(p string) []string {
 
 // NewGitignoreFilter creates a new GitignoreFilter
 func NewFilter(config GitignoreConfig) (*GitignoreFilter, error) {
-	fs := osfs.New(config.RepoRoot)
-	patterns, err := gitignore.ReadPatterns(fs, []string{})
+	repoFS := osfs.New(config.RepoRoot)
+
+	patterns, err := gitignore.ReadPatterns(repoFS, []string{})
 	if err != nil {
 		return nil, err
 	}
 
+	// Use an unrestricted filesystem for reading global/system gitconfig paths so
+	// that absolute Windows paths (e.g. C:\Users\<user>\.gitconfig) are handled
+	// correctly.
+	hostFS := osfs.New("")
+
 	if config.LoadGlobalPatterns {
-		globalPatterns, err := gitignore.LoadGlobalPatterns(fs)
+		globalPatterns, err := gitignore.LoadGlobalPatterns(hostFS)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +75,7 @@ func NewFilter(config GitignoreConfig) (*GitignoreFilter, error) {
 	}
 
 	if config.LoadSystemPatterns {
-		systemPatterns, err := gitignore.LoadSystemPatterns(fs)
+		systemPatterns, err := gitignore.LoadSystemPatterns(hostFS)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +85,7 @@ func NewFilter(config GitignoreConfig) (*GitignoreFilter, error) {
 	}
 
 	matcher := gitignore.NewMatcher(patterns)
-	return &GitignoreFilter{matcher: matcher, fs: fs}, nil
+	return &GitignoreFilter{matcher: matcher, fs: repoFS}, nil
 }
 
 func (g *GitignoreFilter) IsIgnored(path string) (bool, error) {
